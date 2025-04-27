@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Sistema de Gerenciamento de Assistidos - Defensoria Pública</title>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0F4C3A;
+            --secondary: #14795B;
+            --accent: #38B2AC;
+            --background: #F7FAFC;
+            --text: #2D3748;
+        }
+        body { 
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .header {
+            background-color: var(--primary);
+            padding: 1.5rem;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .container { 
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            padding: 2rem;
+        }
+        .form-group { 
+            margin-bottom: 1.5rem;
+        }
+        .form-group label { 
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+        .form-group input, .form-group select { 
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #E2E8F0;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(56, 178, 172, 0.1);
+        }
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .btn { 
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-size: 1rem;
+        }
+        .btn-primary { 
+            background-color: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: var(--secondary);
+        }
+        .btn-secondary {
+            background-color: white;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+        .success-message {
+            background-color: #C6F6D5;
+            color: #2F855A;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+            display: none;
+        }
+    </style>
+    <script>
+        function formatCEP(input) {
+            let value = input.value.replace(/\D/g, '');
+            if (value.length > 8) value = value.slice(0, 8);
+            if (value.length > 5) {
+                value = value.replace(/^(\d{5})(\d{3}).*/, '$1-$2');
+            }
+            input.value = value;
+        }
+
+        function formatCPF(input) {
+            let value = input.value.replace(/\D/g, '');
+            if (value.length > 11) value = value.slice(0, 11);
+            if (value.length > 9) {
+                value = value.replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*/, '$1.$2.$3-$4');
+            } else if (value.length > 6) {
+                value = value.replace(/^(\d{3})(\d{3})(\d{3}).*/, '$1.$2.$3');
+            } else if (value.length > 3) {
+                value = value.replace(/^(\d{3})(\d{3}).*/, '$1.$2');
+            }
+            input.value = value;
+        }
+
+        function showSuccessMessage() {
+            const msg = document.getElementById('successMessage');
+            msg.style.display = 'block';
+            setTimeout(() => {
+                msg.style.display = 'none';
+                document.getElementById('assisteeForm').reset();
+                window.location.href = "/list";
+            }, 1500);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const cidadesPorEstado = {
+                'AC': ['Rio Branco', 'Cruzeiro do Sul', 'Sena Madureira', 'Tarauacá', 'Feijó'],
+                'AL': ['Maceió', 'Arapiraca', 'Rio Largo', 'Palmeira dos Índios', 'Marechal Deodoro'],
+                // Adicione todas as outras cidades dos estados como detalhado anteriormente
+            };
+
+            const estadoSelect = document.getElementById('estado');
+            const cidadeSelect = document.getElementById('cidade');
+            const cidadeManual = document.getElementById('cidadeManual');
+            const botaoAdicionar = document.getElementById('adicionarCidade');
+
+            estadoSelect.addEventListener('change', function() {
+                const estadoSelecionado = this.value;
+                cidadeSelect.innerHTML = '<option value="">Selecione a cidade</option>';
+                cidadeManual.style.display = 'none';
+                botaoAdicionar.style.display = 'none';
+                if (estadoSelecionado && cidadesPorEstado[estadoSelecionado]) {
+                    cidadesPorEstado[estadoSelecionado].forEach(cidade => {
+                        const option = document.createElement('option');
+                        option.value = cidade;
+                        option.textContent = cidade;
+                        cidadeSelect.appendChild(option);
+                    });
+                    cidadeSelect.addEventListener('change', function() {
+                        if (this.value === "") {
+                            cidadeManual.style.display = 'block';
+                            botaoAdicionar.style.display = 'block';
+                        } else {
+                            cidadeManual.style.display = 'none';
+                            botaoAdicionar.style.display = 'none';
+                        }
+                    });
+                }
+            });
+
+            botaoAdicionar.addEventListener('click', function() {
+                const novaCidade = cidadeManual.value.trim();
+                if (novaCidade) {
+                    const option = document.createElement('option');
+                    option.value = novaCidade;
+                    option.textContent = novaCidade;
+                    cidadeSelect.appendChild(option);
+                    cidadeSelect.value = novaCidade; // Seleciona a nova cidade adicionada
+                    cidadeManual.value = ""; // Limpa o campo de entrada
+                    cidadeManual.style.display = 'none';
+                    botaoAdicionar.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+    <div class="header">
+        <h1>Defensoria Pública - Sistema de Gestão de Assistidos</h1>
+    </div>
+    <div class="container">
+        <div class="success-message" id="successMessage">Assistido cadastrado com sucesso!</div>
+        <div class="card">
+            <h2>Novo Cadastro</h2>
+            <form id="assisteeForm" th:action="@{/assistee/add}" th:object="${assistee}" method="post" onsubmit="showSuccessMessage()">
+                <div class="form-group">
+                    <label>Nome Completo</label>
+                    <input type="text" th:field="*{fullName}" required placeholder="Digite o nome completo">
+                </div>
+                <div class="form-group">
+                    <label>CPF</label>
+                    <input type="text" th:field="*{cpf}" required maxlength="14" oninput="formatCPF(this)" placeholder="000.000.000-00">
+                </div>
+                <div class="form-group">
+                    <label>CEP</label>
+                    <input type="text" th:field="*{cep}" required maxlength="9" oninput="formatCEP(this)" placeholder="00000-000">
+                </div>
+                <div class="form-group">
+                    <label>Logradouro</label>
+                    <input type="text" th:field="*{logradouro}" required placeholder="Digite o logradouro">
+                </div>
+                <div class="form-group">
+                    <label>Número</label>
+                    <input type="text" th:field="*{numero}" placeholder="Digite o número">
+                </div>
+                <div class="form-group">
+                    <label>Bairro</label>
+                    <input type="text" th:field="*{bairro}" required placeholder="Digite o bairro">
+                </div>
+                <div class="form-group">
+                    <label>Cidade</label>
+                    <select th:field="*{cidade}" required id="cidade">
+                        <option value="">Selecione primeiro o estado</option>
+                    </select>
+                    <input type="text" id="cidadeManual" placeholder="Digite o nome da cidade" style="display: none;" />
+                    <button id="adicionarCidade" style="display: none;">Adicionar Cidade</button>
+                </div>
+                <div class="form-group">
+                    <label>Estado</label>
+                    <select th:field="*{estado}" required id="estado">
+                        <option value="">Selecione o estado</option>
+                        <option value="AC">Acre</option>
+                        <option value="AL">Alagoas</option>
+                        <option value="AP">Amapá</option>
+                        <option value="AM">Amazonas</option>
+                        <option value="BA">Bahia</option>
+                        <option value="CE">Ceará</option>
+                        <option value="DF">Distrito Federal</option>
+                        <option value="ES">Espírito Santo</option>
+                        <option value="GO">Goiás</option>
+                        <option value="MA">Maranhão</option>
+                        <option value="MT">Mato Grosso</option>
+                        <option value="MS">Mato Grosso do Sul</option>
+                        <option value="MG">Minas Gerais</option>
+                        <option value="PA">Pará</option>
+                        <option value="PB">Paraíba</option>
+                        <option value="PR">Paraná</option>
+                        <option value="PE">Pernambuco</option>
+                        <option value="PI">Piauí</option>
+                        <option value="RJ">Rio de Janeiro</option>
+                        <option value="RN">Rio Grande do Norte</option>
+                        <option value="RS">Rio Grande do Sul</option>
+                        <option value="RO">Rondônia</option>
+                        <option value="RR">Roraima</option>
+                        <option value="SC">Santa Catarina</option>
+                        <option value="SP">São Paulo</option>
+                        <option value="SE">Sergipe</option>
+                        <option value="TO">Tocantins</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Complemento</label>
+                    <input type="text" th:field="*{complemento}" placeholder="Digite o complemento (opcional)">
+                </div>
+                <div class="form-group">
+                    <label>Gênero</label>
+                    <select th:field="*{gender}" required>
+                        <option value="">Selecione o gênero</option>
+                        <option value="Feminino">Feminino</option>
+                        <option value="Masculino">Masculino</option>
+                    </select>
+                </<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Sistema de Gerenciamento de Assistidos - Defensoria Pública</title>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0F4C3A;
+            --secondary: #14795B;
+            --accent: #38B2AC;
+            --background: #F7FAFC;
+            --text: #2D3748;
+        }
+        /* Estilização básica do corpo */
+        body { 
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        /* Estilo para o cabeçalho */
+        .header {
+            background-color: var(--primary);
+            padding: 1.5rem;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        /* Estilo para o container principal */
+        .container { 
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        /* Estilo para os cards */
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            padding: 2rem;
+        }
+        /* Estilos para grupos de formulários */
+        .form-group { 
+            margin-bottom: 1.5rem;
+        }
+        .form-group label { 
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text);
+        }
+        .form-group input, .form-group select { 
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #E2E8F0;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(56, 178, 172, 0.1);
+        }
+        /* Estilo para mensagens de sucesso */
+        .success-message {
+            background-color: #C6F6D5;
+            color: #2F855A;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1.5rem;
+            display: none;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Mapeamento de cidades por estados
+            const cidadesPorEstado = {
+                'AC': ['Rio Branco', 'Cruzeiro do Sul', 'Sena Madureira', 'Tarauacá', 'Feijó'],
+                'AL': ['Maceió', 'Arapiraca', 'Rio Largo', 'Palmeira dos Índios', 'Marechal Deodoro'],
+                // Adicione as outras cidades de todos os estados aqui...
+            };
+
+            const estadoSelect = document.getElementById('estado');
+            const cidadeSelect = document.getElementById('cidade');
+            const cidadeManual = document.getElementById('cidadeManual');
+            const botaoAdicionar = document.getElementById('adicionarCidade');
+
+            // Evento ao mudar o estado
+            estadoSelect.addEventListener('change', function() {
+                const estadoSelecionado = this.value;
+                cidadeSelect.innerHTML = '<option value="">Escreva o nome da cidade</option>'; // Mudança: permite digitar
+                cidadeManual.style.display = 'block'; // Mostrar campo manual de entrada de cidade
+                botaoAdicionar.style.display = 'block'; // Mostrar botão para adicionar cidade
+                cidadeManual.value = ''; // Limpa o campo manual
+
+                // Preencher a lista de cidades se o estado selecionado for válido
+                if (estadoSelecionado && cidadesPorEstado[estadoSelecionado]) {
+                    cidadesPorEstado[estadoSelecionado].forEach(cidade => {
+                        const option = document.createElement('option');
+                        option.value = cidade;
+                        option.textContent = cidade;
+                        cidadeSelect.appendChild(option);
+                    });
+                }
+            });
+
+            // Evento ao clicar no botão de adicionar cidade
+            botaoAdicionar.addEventListener('click', function() {
+                const novaCidade = cidadeManual.value.trim();
+                if (novaCidade) {
+                    const option = document.createElement('option');
+                    option.value = novaCidade;
+                    option.textContent = novaCidade;
+                    cidadeSelect.appendChild(option);
+                    cidadeSelect.value = novaCidade; // Seleciona a nova cidade adicionada
+                    cidadeManual.value = ""; // Limpa o campo de entrada
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+    <div class="header">
+        <h1>Defensoria Pública - Sistema de Gestão de Assistidos</h1>
+    </div>
+    <div class="container">
+        <div class="success-message" id="successMessage">Assistido cadastrado com sucesso!</div>
+        <div class="card">
+            <h2>Novo Cadastro</h2>
+            <form id="assisteeForm" th:action="@{/assistee/add}" th:object="${assistee}" method="post" onsubmit="showSuccessMessage()">
+                <!-- Formulário de cadastro -->
+                <div class="form-group">
+                    <label>Nome Completo</label>
+                    <input type="text" th:field="*{fullName}" required placeholder="Digite o nome completo">
+                </div>
+                <div class="form-group">
+                    <label>CPF</label>
+                    <input type="text" th:field="*{cpf}" required maxlength="14" oninput="formatCPF(this)" placeholder="000.000.000-00">
+                </div>
+                <div class="form-group">
+                    <label>CEP</label>
+                    <input type="text" th:field="*{cep}" required maxlength="9" oninput="formatCEP(this)" placeholder="00000-000">
+                </div>
+                <div class="form-group">
+                    <label>Logradouro</label>
+                    <input type="text" th:field="*{logradouro}" required placeholder="Digite o logradouro">
+                </div>
+                <div class="form-group">
+                    <label>Número</label>
+                    <input type="text" th:field="*{numero}" placeholder="Digite o número">
+                </div>
+                <div class="form-group">
+                    <label>Bairro</label>
+                    <input type="text" th:field="*{bairro}" required placeholder="Digite o bairro">
+                </div>
+                <div class="form-group">
+                    <label>Cidade</label>
+                    <!-- Select para cidades agora está configurado para aceitar entrada de texto -->
+                    <select th:field="*{cidade}" required id="cidade">
+                        <option value="">Escreva o nome da cidade</option> 
+                    </select>
+                    <input type="text" id="cidadeManual" placeholder="Digite o nome da cidade" style="display: block;" />
+                    <button type="button" id="adicionarCidade" style="display: block;">Adicionar Cidade</button>
+                </div>
+                <div class="form-group">
+                    <label>Estado</label>
+                    <select th:field="*{estado}" required id="estado">
+                        <option value="">Selecione o estado</option>
+                        <option value="AC">Acre</option>
+                        <option value="AL">Alagoas</option>
+                        <option value="AP">Amapá</option>
+                        <option value="AM">Amazonas</option>
+                        <option value="BA">Bahia</option>
+                        <option value="CE">Ceará</option>
+                        <option value="DF">Distrito Federal</option>
+                        <option value="ES">Espírito Santo</option>
+                        <option value="GO">Goiás</option>
+                        <option value="MA">Maranhão</option>
+                        <option value="MT">Mato Grosso</option>
+                        <option value="MS">Mato Grosso do Sul</option>
+                        <option value="MG">Minas Gerais</option>
+                        <option value="PA">Pará</option>
+                        <option value="PB">Paraíba</option>
+                        <option value="PR">Paraná</option>
+                        <option value="PE">Pernambuco</option>
+                        <option value="PI">Piauí</option>
+                        <option value="RJ">Rio de Janeiro</option>
+                        <option value="RN">Rio Grande do Norte</option>
+                        <option value="RS">Rio Grande do Sul</option>
+                        <option value="RO">Rondônia</option>
+                        <option value="RR">Roraima</option>
+                        <option value="SC">Santa Catarina</option>
+                        <option value="SP">São Paulo</option>
+                        <option value="SE">Sergipe</option>
+                        <option value="TO">Tocantins</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Complemento</label>
+                    <input type="text" th:field="*{complemento}" placeholder="Digite o complemento (opcional)">
+                </div>
+                <div class="form-group">
+                    <label>Gênero</label>
+                    <select th:field="*{gender}" required>
+                        <option value="">Selecione o gênero</option>
+                        <option value="Feminino">Feminino</option>
+                        <option value="Masculino">Masculino</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html><!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Sistema de Gerenciamento de Assistidos - Defensoria Pública</title>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0F4C3A; /* Cor principal */
+            --secondary: #14795B; /* Cor secundária */
+            --accent: #38B2AC; /* Cor de destaque */
+            --background: #F7FAFC; /* Cor de fundo */
+            --text: #2D3748; /* Cor do texto */
+        }
+        body {
+            font-family: 'Inter', sans-serif; /* Fonte padrão */
+            margin: 0;
+            padding: 0;
+            background-color: var(--background); /* Aplicando cor de fundo */
+            color: var(--text); /* Aplicando cor do texto */
+            min-height: 100vh; /* Altura mínima da página */
+        }
+        .header {
+            background-color: var(--primary); /* Cor de fundo do cabeçalho */
+            padding: 1.5rem;
+            color: white; /* Cor do texto no cabeçalho */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* Sombreamento do cabeçalho */
+        }
+        .container {
+            max-width: 1200px; /* Largura máxima do container */
+            margin: 2rem auto;
+            padding: 0 1.5rem; /* Padding lateral */
+        }
+        .card {
+            background: white; /* Fundo branco do card */
+            border-radius: 8px; /* Bordas arredondadas */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); /* Sombreamento do card */
+            padding: 2rem; /* Padding interno do card */
+        }
+        .form-group {
+            margin-bottom: 1.5rem; /* Espaçamento inferior entre os campos do formulário */
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem; /* Espaçamento abaixo do rótulo */
+            font-weight: 500;
+            color: var(--text); /* Cor do texto do rótulo */
+        }
+        .form-group input {
+            width: 100%; /* Largura total do campo de entrada */
+            padding: 0.75rem; /* Padding dentro do campo */
+            border: 1px solid #E2E8F0; /* Borda padrão */
+            border-radius: 6px; /* Arredondamento da borda */
+            font-size: 1rem; /* Tamanho da fonte */
+            transition: all 0.2s; /* Transição suave em interações */
+        }
+        .form-group input:focus {
+            outline: none; /* Remove o contorno padrão */
+            border-color: var(--accent); /* Cor da borda em foco */
+            box-shadow: 0 0 0 3px rgba(56, 178, 172, 0.1); /* Sombra em foco */
+        }
+        .btn-group {
+            display: flex; /* Linha flexível para os botões */
+            gap: 1rem; /* Espaçamento entre os botões */
+            margin-top: 2rem; /* Margem superior */
+        }
+        .btn {
+            padding: 0.75rem 1.5rem; /* Padding interno dos botões */
+            border-radius: 6px; /* Bordas arredondadas dos botões */
+            font-weight: 500; /* Peso da fonte dos botões */
+            cursor: pointer; /* Muda o cursor ao passar por cima */
+            transition: all 0.2s; /* Transição suave em interações */
+            border: none; /* Remove borda padrão */
+            font-size: 1rem; /* Tamanho da fonte dos botões */
+        }
+        .btn-primary {
+            background-color: var(--primary); /* Fundo do botão primário */
+            color: white; /* Cor do texto do botão */
+        }
+        .success-message {
+            background-color: #C6F6D5; /* Fundo da mensagem de sucesso */
+            color: #2F855A; /* Cor do texto da mensagem */
+            padding: 1rem; /* Padding interno da mensagem */
+            border-radius: 6px; /* Bordas arredondadas da mensagem */
+            margin-bottom: 1.5rem; /* Margem abaixo da mensagem */
+            display: none; /* Inicialmente oculta */
+        }
+    </style>
+    <script>
+        // Formatação do CEP
+        function formatCEP(input) {
+            let value = input.value.replace(/\D/g, ''); // Remove caracteres não numéricos
+            if (value.length > 8) value = value.slice(0, 8); // Limita o tamanho a 8
+            if (value.length > 5) {
+                value = value.replace(/^(\d{5})(\d{3}).*/, '$1-$2'); // Adiciona hífen
+            }
+            input.value = value; // Atualiza o valor do input
+        }
+
+        // Formatação do CPF
+        function formatCPF(input) {
+            let value = input.value.replace(/\D/g, ''); // Remove caracteres não numéricos
+            if (value.length > 11) value = value.slice(0, 11); // Limita o tamanho a 11
+            if (value.length > 9) {
+                value = value.replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*/, '$1.$2.$3-$4'); // Formata CPF
+            } else if (value.length > 6) {
+                value = value.replace(/^(\d{3})(\d{3})(\d{3}).*/, '$1.$2.$3'); // Formatação intermediária
+            } else if (value.length > 3) {
+                value = value.replace(/^(\d{3})(\d{3}).*/, '$1.$2'); // Parte inicial do CPF
+            }
+            input.value = value; // Atualiza o valor do input
+        }
+
+        // Exibir mensagem de sucesso após envio do formulário
+        function showSuccessMessage() {
+            const msg = document.getElementById('successMessage'); // Seleciona a mensagem
+            msg.style.display = 'block'; // Exibe a mensagem
+            setTimeout(() => {
+                msg.style.display = 'none'; // Oculta a mensagem após 1.5 segundos
+                document.getElementById('assisteeForm').reset(); // Reseta o formulário
+                window.location.href = "/list"; // Redireciona para a lista
+            }, 1500);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Dicionário de cidades por estado
+            const cidadesPorEstado = {
+                'AC': ['Rio Branco', 'Cruzeiro do Sul', 'Sena Madureira'],
+                'AL': ['Maceió', 'Arapiraca', 'Rio Largo'],
+                // Outras cidades podem ser adicionadas conforme necessário
+            };
+
+            const estadoSelect = document.getElementById('estado'); // Seleção de estado
+            const cidadeSelect = document.getElementById('cidade'); // Seleção de cidade
+            const cidadeManual = document.getElementById('cidadeManual'); // Campo de entrada para cidade manual
+            const botaoAdicionar = document.getElementById('adicionarCidade'); // Botão para adicionar cidade
+
+            // Evento que atualiza as cidades ao mudar o estado
+            estadoSelect.addEventListener('change', function() {
+                const estadoSelecionado = this.value; // Obtém o estado selecionado
+                cidadeSelect.innerHTML = '<option value="">Selecione a cidade</option>'; // Reseta as cidades
+                cidadeManual.style.display = 'none'; // Esconde campo manual
+                botaoAdicionar.style.display = 'none'; // Esconde botão de adicionar
+                if (estadoSelecionado && cidadesPorEstado[estadoSelecionado]) {
+                    cidadesPorEstado[estadoSelecionado].forEach(cidade => {
+                        const option = document.createElement('option'); // Cria novo elemento de opção
+                        option.value = cidade;
+                        option.textContent = cidade; // Define texto da opção
+                        cidadeSelect.appendChild(option); // Adiciona opção ao select
+                    });
+                    // Evento para mostrar campo manual se a opção "Selecione" for escolhida
+                    cidadeSelect.addEventListener('change', function() {
+                        if (this.value === "") {
+                            cidadeManual.style.display = 'block'; // Mostra campo manual
+                            botaoAdicionar.style.display = 'block'; // Mostra botão de adicionar
+                        } else {
+                            cidadeManual.style.display = 'none'; // Esconde campo manual se uma cidade for escolhida
+                            botaoAdicionar.style.display = 'none'; // Esconde botão de adicionar
+                        }
+                    });
+                }
+            });
+
+            // Evento que adiciona a cidade digitada
+            botaoAdicionar.addEventListener('click', function() {<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Sistema de Gerenciamento de Assistidos - Defensoria Pública</title>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0F4C3A;
+            --secondary: #14795B;
+            --accent: #38B2AC;
+            --background: #F7FAFC;
+            --text: #2D3748;
+        }
+        body { 
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .header {
+            background-color: var(--primary);
+            padding: 1.5rem;
+            color: white;
+            box-shadow:<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Sistema de Gerenciamento de Assistidos - Defensoria Pública</title>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0F4C3A; /* Cor primária do tema */
+            --secondary: #14795B; /* Cor secundária do tema */
+            --accent: #38B2AC; /* Cor de destaque */
+            --background: #F7FAFC; /* Cor de fundo */
+            --text: #2D3748; /* Cor do texto */
+        }
+        body { 
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background); /* Aplica a cor de fundo */
+            color: var(--text); /* Aplica a cor do texto */
+            min-height: 100vh; /* Define a altura mínima */
+        }
+        .header {
+            background-color: var(--primary); /* Cor de fundo da cabeçalho */
+            padding: 1.5rem;
+            color: white; /* Cor do texto do cabeçalho */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* Sombra para o cabeçalho */
+        }
+        .container { 
+            max-width: 1200px; /* Largura máxima da container */
+            margin: 2rem auto; /* Margens auto para centralizar */
+            padding: 0 1.5rem; /* Padding lateral */
+        }
+        .card {
+            background: white; /* Cor de fundo do cartão */
+            border-radius: 8px; /* Bordas arredondadas */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); /* Sombra do cartão */
+            padding: 2rem; /* Espaçamento interno do cartão */
+        }
+        .form-group { 
+            margin-bottom: 1.5rem; /* Espaçamento entre campos */
+        }
+        .form-group label { 
+            display: block; /* Exibe o rótulo como bloco */
+            margin-bottom: 0.5rem; /* Margem inferior do rótulo */
+            font-weight: 500; /* Peso da fonte do rótulo */
+            color: var(--text); /* Cor do texto do rótulo */
+        }
+        .form-group input { 
+            width: 100%; /* Largura total do campo */
+            padding: 0.75rem; /* Padding interno do campo */
+            border: 1px solid #E2E8F0; /* Borda do campo */
+            border-radius: 6px; /* Bordas arredondadas do campo */
+            font-size: 1rem; /* Tamanho da fonte */
+            transition: all 0.2s; /* Transição para interação */
+        }
+        .form-group input:focus {
+            outline: none; /* Remove contorno padrão */
+            border-color: var(--accent); /* Cor da borda no foco */
+            box-shadow: 0 0 0 3px rgba(56, 178, 172, 0.1); /* Sombreamento ao focar */
+        }
+        .btn-group {
+            display: flex; /* Exibição flexível para botões */
+            gap: 1rem; /* Espaçamento entre botões */
+            margin-top: 2rem; /* Margem superior dos botões */
+        }
+        .btn { 
+            padding: 0.75rem 1.5rem; /* Padding dos botões */
+            border-radius: 6px; /* Bordas arredondadas dos botões */
+            font-weight: 500; /* Peso da fonte dos botões */
+            cursor: pointer; /* Cursor de ponteiro ao passar */
+            transition: all 0.2s; /* Transição dos botões */
+            border: none; /* Retira bordas dos botões */
+            font-size: 1rem; /* Tamanho da fonte dos botões */
+        }
+        .btn-primary { 
+            background-color: var(--primary); /* Cor de fundo do botão primário */
+            color: white; /* Cor do texto do botão primário */
+        }
+        .success-message {
+            background-color: #C6F6D5; /* Cor de fundo da mensagem de sucesso */
+            color: #2F855A; /* Cor do texto da mensagem de sucesso */
+            padding: 1rem; /* Padding da mensagem de sucesso */
+            border-radius: 6px; /* Bordas arredondadas da mensagem de sucesso */
+            margin-bottom: 1.5rem; /* Margem inferior da mensagem de sucesso */
+            display: none; /* Oculta a mensagem inicialmente */
+        }
+    </style>
+    <script>
+        // Função para mostrar a mensagem de sucesso após o envio do formulário
+        function showSuccessMessage() {
+            const msg = document.getElementById('successMessage'); 
+            msg.style.display = 'block'; // Exibe a mensagem
+            // Oculta a mensagem após 1.5 segundos e reseta o formulário
+            setTimeout(() => {
+                msg.style.display = 'none';
+                document.getElementById('assisteeForm').reset();
+                window.location.href = "/list"; // Redireciona para a lista após o sucesso
+            }, 1500);
+        }
+    </script>
+</head>
+<body>
+    <div class="header">
+        <h1>Defensoria Pública - Sistema de Gestão de Assistidos</h1> <!-- Título principal -->
+    </div>
+    <div class="container">
+        <div class="success-message" id="successMessage">Assistido cadastrado com sucesso!</div> <!-- Mensagem de sucesso -->
+        <div class="card">
+            <h2>Novo Cadastro</h2> <!-- Título do cadastro -->
+            <form id="assisteeForm" th:action="@{/assistee/add}" th:object="${assistee}" method="post" onsubmit="showSuccessMessage()"> <!-- Formulário de cadastro -->
+                <div class="form-group">
+                    <label>Cidade</label> <!-- Rótulo para o campo de cidade -->
+                    <input type="text" id="cidadeManual" placeholder="Digite o nome da cidade" required /> <!-- Campo para entrada da cidade -->
+                </div>
+                <!-- Outros campos do formulário -->
+            </form>
+        </div>
+    </div>
+</body>
+</html><!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Sistema de Gerenciamento de Assistidos - Defensoria Pública</title>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0F4C3A; /* Cor primária do tema */
+            --secondary: #14795B; /* Cor secundária do tema */
+            --accent: #38B2AC; /* Cor de destaque */
+            --background: #F7FAFC; /* Cor de fundo */
+            --text: #2D3748; /* Cor do texto */
+        }
+        body { 
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background); /* Aplica a cor de fundo */
+            color: var(--text); /* Aplica a cor do texto */
+            min-height: 100vh; /* Define a altura mínima */
+        }
+        .header {
+            background-color: var(--primary); /* Cor de fundo da cabeçalho */
+            padding: 1.5rem;
+            color: white; /* Cor do texto do cabeçalho */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* Sombra para o cabeçalho */
+        }
+        .container { 
+            max-width: 1200px; /* Largura máxima da container */
+            margin: 2rem auto; /* Margens auto para centralizar */
+            padding: 0 1.5rem; /* Padding lateral */
+        }
+        .card {
+            background: white; /* Cor de fundo do cartão */
+            border-radius: 8px; /* Bordas arredondadas */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); /* Sombra do cartão */
+            padding: 2rem; /* Espaçamento interno do cartão */
+        }
+        .form-group { 
+            margin-bottom: 1.5rem; /* Espaçamento entre campos */
+        }
+        .form-group label { 
+            display: block; /* Exibe o rótulo como bloco */
+            margin-bottom: 0.5rem; /* Margem inferior do rótulo */
+            font-weight: 500; /* Peso da fonte do rótulo */
+            color: var(--text); /* Cor do texto do rótulo */
+        }
+        .form-group input { 
+            width: 100%; /* Largura total do campo */
+            padding: 0.75rem; /* Padding interno do campo */
+            border: 1px solid #E2E8F0; /* Borda do campo */
+            border-radius: 6px; /* Bordas arredondadas do campo */
+            font-size: 1rem; /* Tamanho da fonte */
+            transition: all 0.2s; /* Transição para interação */
+        }
+        .form-group input:focus {
+            outline: none; /* Remove contorno padrão */
+            border-color: var(--accent); /* Cor da borda no foco */
+            box-shadow: 0 0 0 3px rgba(56, 178, 172, 0.1); /* Sombreamento ao focar */
+        }
+        .btn-group {
+            display: flex; /* Exibição flexível para botões */
+            gap: 1rem; /* Espaçamento entre botões */
+            margin-top: 2rem; /* Margem superior dos botões */
+        }
+        .btn { 
+            padding: 0.75rem 1.5rem; /* Padding dos botões */
+            border-radius: 6px; /* Bordas arredondadas dos botões */
+            font-weight: 500; /* Peso da fonte dos botões */
+            cursor: pointer; /* Cursor de ponteiro ao passar */
+            transition: all 0.2s; /* Transição dos botões */
+            border: none; /* Retira bordas dos botões */
+            font-size: 1rem; /* Tamanho da fonte dos botões */
+        }
+        .btn-primary { 
+            background-color: var(--primary); /* Cor de fundo do botão primário */
+            color: white; /* Cor do texto do botão primário */
+        }
+        .success-message {
+            background-color: #C6F6D5; /* Cor de fundo da mensagem de sucesso */
+            color: #2F855A; /* Cor do texto da mensagem de sucesso */
+            padding: 1rem; /* Padding da mensagem de sucesso */
+            border-radius: 6px; /* Bordas arredondadas da mensagem de sucesso */
+            margin-bottom: 1.5rem; /* Margem inferior da mensagem de sucesso */
+            display: none; /* Oculta a mensagem inicialmente */
+        }
+    </style>
+    <script>
+        // Função para mostrar a mensagem de sucesso após o envio do formulário
+        function showSuccessMessage() {
+            const msg = document.getElementById('successMessage'); 
+            msg.style.display = 'block'; // Exibe a mensagem
+            // Oculta a mensagem após 1.5 segundos e reseta o formulário
+            setTimeout(() => {
+                msg.style.display = 'none';
+                document.getElementById('assisteeForm').reset();
+                window.location.href = "/list"; // Redireciona para a lista após o sucesso
+            }, 1500);
+        }
+    </script>
+</head>
+<body>
+    <div class="header">
+        <h1>Defensoria Pública - Sistema de Gestão de Assistidos</h1> <!-- Título principal -->
+    </div>
+    <div class="container">
+        <div class="success-message" id="successMessage">Assistido cadastrado com sucesso!</div> <!-- Mensagem de sucesso -->
+        <div class="card">
+            <h2>Novo Cadastro</h2> <!-- Título do cadastro -->
+            <form id="assisteeForm" th:action="@{/assistee/add}" th:object="${assistee}" method="post" onsubmit="showSuccessMessage()"> <!-- Formulário de cadastro -->
+                <div class="form-group">
+                    <label>Cidade</label> <!-- Rótulo para o campo de cidade -->
+                    <input type="text" id="cidadeManual" placeholder="Digite o nome da cidade" required /> <!-- Campo para entrada da cidade -->
+                </div>
+                <div class="form-group">
+                    <label>Número</label>
+                    <input type="text" th:field="*{numero}" placeholder="Digite o número">
+                </div>
+                <div class="form-group">
+                    <label>Bairro</label>
+                    <input type="text" th:field="*{bairro}" required placeholder="Digite o bairro">
+                </div>
+                <!-- Outros campos do formulário -->
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">Cadastrar</button> <!-- Botão para cadastrar -->
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html><form id="assisteeForm" th:action="@{/assistee/add}" th:object="${assistee}" method="post" onsubmit="showSuccessMessage()"> 
+    <div class="form-group">
+        <label>Cidade</label> 
+        <input type="text" id="cidadeManual" placeholder="Digite o nome da cidade" required /> <!-- Campo para entrada da cidade -->
+    </div>
+    <div class="form-group">
+        <label>Número</label>
+        <input type="text" th:field="*{numero}" placeholder="Digite o número">
+    </div>
+    <div class="form-group">
+        <label>Bairro</label>
+        <input type="text" th:field="*{bairro}" required placeholder="Digite o bairro">
+    </div>
+    <div class="btn-group">
+        <button type="submit" class="btn btn-primary">Cadastrar</button> 
+    </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Mapeamento de cidades por estados
+    const cidadesPorEstado = {
+        'AC': ['Rio Branco'],
+        'AL': ['Maceió'],
+        // Adicione todas as outras cidades dos estados aqui...
+    };
+
+    const estadoSelect = document.getElementById('estado');
+    const cidadeManual = document.getElementById('cidadeManual');
+
+    // Ocultar cidade manual inicialmente
+    cidadeManual.style.display = 'block'; // Sempre exibe o campo para digitar a cidade
+
+    // Evento ao mudar o estado
+    estadoSelect.addEventListener('change', function() {
+        const estadoSelecionado = this.value;
+        // Aqui você pode adicionar lógica se precisar interagir com a lista de cidades ou usar a cidade manual
+        cidadeManual.value = ''; // Limpa o campo de entrada manual
+    });
+});
+</script>
